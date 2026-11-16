@@ -252,7 +252,7 @@ for (const failure of ['停滞', '媒体报错']) {
       item.classList.add('is-active');
       Object.defineProperty(f.media, 'error', {
         // Decode failure exercises the three-attempt media budget. Code 2 is
-        // a network failure with the separate one-refresh policy from 1.3.8.
+        // a network failure with the separate one-refresh policy.
         get: () => failing && failure === '媒体报错' ? { code: 3 } : null
       });
       item.addEventListener('click', () => {

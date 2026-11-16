@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "minimum_chrome_version": "102",
   "name": "芯位教育助手",
-  "version": "1.4.0",
-  "version_name": "1.4.0 外围双模式待验收版（内核基于1.3.9）",
+  "version": "1.0.0",
+  "version_name": "1.0.0",
   "description": "默认半自动选课；明确授权全自动后按固定列表串行处理，保留单课执行机制与本轮结果。",
   "permissions": [
     "storage",

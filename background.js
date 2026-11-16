@@ -148,7 +148,7 @@
     const candidate = job?.candidates?.[job.targetIndex];
     return redactDiagnostic({
       schemaVersion: 1, capturedAt: Date.now(),
-      extensionVersion: chrome.runtime.getManifest?.().version || '1.4.0',
+      extensionVersion: chrome.runtime.getManifest?.().version || '1.0.0',
       runId: String(job?.runId || '').slice(0, 120), generation: job?.generation ?? null, resetEpoch: resetEpoch(job),
       phase: String(job?.phase || 'idle').slice(0, 60), running: Boolean(job?.running), reason: String(job?.reason || '').slice(0, 400),
       courseKey: String(candidate?.courseKey || '').slice(0, 1000), courseTitle: String(candidate?.title || '').slice(0, 160),

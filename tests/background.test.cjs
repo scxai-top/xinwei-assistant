@@ -788,7 +788,7 @@ test('尝试打开失败不能冒充已打开，但重启后仍保留未结束�
   assert.notEqual(r.job.candidates[0].records.video.ended, true);
 });
 
-test('兼容 1.3.3 没有开始或尝试标记的错误记录，重启恢复后仍不得跳过', async () => {
+test('兼容没有开始或尝试标记的错误记录，重启恢复后仍不得跳过', async () => {
   const c = coordinator();
   const worker = c.addTab(learnUrl());
   const snapshot = singleMediaDirectory('legacy-error', '旧版未结束视频');

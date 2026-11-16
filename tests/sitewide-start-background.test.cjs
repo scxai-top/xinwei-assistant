@@ -243,7 +243,7 @@ test(`旧全课任务迁移后不复活且保留记录（${area}，模式=${work
     ...auth(f.job), result: { total: 1, remaining: 1 }
   });
   job = await f.request(f.worker, 'worker', 'document-visited', { ...auth(job), key: 'doc' });
-  // This models a checkpoint written by 1.3.8, not a new playback authorization.
+  // This models a persisted checkpoint, not a new playback authorization.
   const legacy = plain(job);
   if (workflow) legacy.workflow = workflow;
   else delete legacy.workflow;
