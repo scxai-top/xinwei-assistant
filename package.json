@@ -1,0 +1,12 @@
+{
+  "name": "xinwei-watcher",
+  "private": true,
+  "version": "1.4.0",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check diagnostic-archive.js && node --check route-utils.js && node --check assistant-ui.js && node --check content.js && node --check background.js"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "102",
+  "name": "芯位教育助手",
+  "version": "1.4.0",
+  "version_name": "1.4.0 外围双模式待验收版（内核基于1.3.9）",
+  "description": "默认半自动选课；明确授权全自动后按固定列表串行处理，保留单课执行机制与本轮结果。",
+  "permissions": [
+    "storage",
+    "alarms",
+    "power"
+  ],
+  "host_permissions": [
+    "https://www.beeline-ai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.beeline-ai.com/student/*",
+        "https://www.beeline-ai.com/*"
+      ],
+      "js": [
+        "route-utils.js",
+        "assistant-ui.js",
+        "content.js"
+      ],
+      "run_at": "document_idle",
+      "css": [
+        "assistant-ui.css"
+      ]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/floating-assistant.png"
+      ],
+      "matches": [
+        "https://www.beeline-ai.com/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "芯位教育助手"
+  }
+}

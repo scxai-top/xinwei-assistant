@@ -1,0 +1,147 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { fixture, homeFixture, mediaItem } = require('./helpers.cjs');
+
+function setup() {
+  const f = fixture([mediaItem('视频一'), mediaItem('音频一', 'audio')]);
+  const directory = f.api.getDirectorySnapshot(), key = f.api.currentCourseKey();
+  f.api.state.tabId = 1;
+  f.api.state.job = {runId:'summary',running:false,phase:'paused',scope:'all',targetIndex:0,targetPurpose:'play',
+    candidates:[{key:'active',courseKey:key,title:'操作系统原理',status:'inspected',total:2,remaining:1,directory,
+      records:{[directory.items[0].key]:{confirmed:true}}},
+      {key:'done',title:'已完成课程',status:'complete',total:1,remaining:0,records:{}},
+      {key:'manual',title:'待处理课程',status:'manual',records:{}},
+      {key:'unknown',title:'未统计课程',status:'uninspected',records:{}}]};
+  f.api.updateTaskControls();
+  return Object.assign(f,{box:f.window.document.getElementById('wb-study-ui'),ui:f.api.state.uiController,job:f.api.state.job});
+}
+
+test('home distinguishes course completion, learning-item completion and target without task commands',()=>{
+  const f=setup();
+  try {
+    let commands=0,clicks=0;
+    f.window.chrome.runtime.sendMessage=async()=>{commands++;return {ok:true};};
+    f.window.document.querySelector('.sub-menu-area').addEventListener('click',()=>clicks++);
+    const summary=f.box.querySelector('#wb-home-summary'), local=f.box.querySelector('#wb-home-course-progress');
+    assert.match(summary.textContent,/已完成 1 门.*待完成 3 门/s);
+    assert.equal(summary.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'25');
+    assert.match(local.textContent,/已完成 1 项 · 待完成 1 项/);
+    assert.equal(local.querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'50');
+    summary.querySelector('[data-course-filter=pending]').click();
+    assert.equal(f.ui.view,'courses');assert.equal(f.box.querySelectorAll('[data-course]').length,3);
+    assert.equal(f.box.querySelector('[data-course=1]'),null);
+    f.box.querySelector('[data-course-filter=complete]').click();
+    assert.equal(f.box.querySelectorAll('[data-course]').length,1);
+    f.box.querySelector('[data-course=1]').click();assert.equal(f.ui.view,'course');
+    assert.match(f.box.querySelector('[data-view=course]').textContent,/已完成课程/);
+    f.ui.navigate('home');f.box.querySelector('[data-current-directory]').click();
+    assert.match(f.box.querySelector('[data-view=course]').textContent,/操作系统原理/);
+    f.ui.navigate('home');f.box.querySelector('[data-current-directory]').click();assert.equal(f.ui.view,'course');
+    f.ui.navigate('home');f.box.querySelector('[data-course-filter=attention]').click();
+    assert.equal(f.box.querySelectorAll('[data-course]').length,1);assert.ok(f.box.querySelector('[data-course=2]'));
+    assert.equal(commands,0);assert.equal(clicks,0);assert.equal(f.media.paused,true);
+  } finally {f.window.close();}
+});
+
+test('scanning and unknown totals omit percentages; target reached does not confirm an item',()=>{
+  const f=setup();
+  try {
+    f.job.phase='scan-home';f.ui.render();
+    const summary=f.box.querySelector('#wb-home-summary');
+    assert.match(summary.textContent,/扫描中.*已发现 4 门课程/s);assert.equal(summary.querySelector('#wb-home-task-progress [role=progressbar]'),null);
+    const c=f.job.candidates[0];c.total=5;delete c.remaining;c.records={};
+    c.records[c.directory.items[0].key]={targetReached:true,ended:true};
+    f.ui.render();assert.match(f.box.querySelector('#wb-home-course-progress').textContent,/已完成 0 项 · 待完成 5 项/);
+    delete c.total;c.directory=undefined;
+    f.window.document.querySelector('.sub-menu-area').remove();f.ui.render();
+    assert.match(f.box.querySelector('#wb-home-course-progress').textContent,/统计中/);
+    assert.equal(f.box.querySelector('#wb-home-course-progress [role=progressbar]'),null);
+  } finally {f.window.close();}
+});
+
+test('empty results do not claim 100 percent; completed courses use the confirmed count',()=>{
+  const f=homeFixture([]);
+  try {
+    f.api.state.job={runId:'empty',running:false,phase:'finished',candidates:[]};f.api.updateTaskControls();
+    const box=f.window.document.getElementById('wb-study-ui');
+    assert.match(box.querySelector('#wb-home-summary').textContent,/共 0 门/);
+    assert.equal(box.querySelector('#wb-home-summary [role=progressbar]'),null);
+    assert.equal(box.querySelector('#wb-ui-directory').hidden,true);
+    f.api.state.job.candidates=[{key:'a',title:'完成课',status:'complete',total:1,remaining:0}];f.api.updateTaskControls();
+    assert.equal(box.querySelector('#wb-home-summary [role=progressbar]').getAttribute('aria-valuenow'),'100');
+    box.querySelector('[data-course-filter=pending]').click();assert.match(box.querySelector('[data-view=courses]').textContent,/暂无符合此分类/);
+    f.api.state.job={runId:'next',running:false,phase:'paused',candidates:[{key:'b',title:'新课程'}]};f.api.updateTaskControls();
+    assert.ok(box.querySelector('[data-course=0]'),'a new task clears the old filter');
+  } finally {f.window.close();}
+});
+
+test('a live course page outside the job does not inflate task course totals',()=>{
+  const f=setup();
+  try {
+    f.job.candidates=[];f.job.phase='finished';f.ui.render();
+    assert.match(f.box.querySelector('#wb-home-summary').textContent,/共 0 门/);
+    assert.equal(f.box.querySelector('#wb-ui-directory').hidden,true);
+    f.ui.navigate('courses');assert.equal(f.box.querySelector('[data-course]'),null);
+  } finally {f.window.close();}
+});
+
+test('course drawer waits for complete scan, opens once, remembers closing and stays read-only',()=>{
+  const f=setup();
+  try {
+    const c=f.job.candidates[0];
+    f.job.workflow='manual';f.job.operation='inspect';f.job.running=true;f.job.phase='course';
+    c.scanState='scanning';f.ui.render();
+    assert.equal(f.box.querySelector('[data-course-drawer]'),null);
+    assert.equal(f.box.querySelector('#wb-home-course-progress').hidden,true);
+    c.scanState='ready';c.scannedAt=Date.now();f.job.operation='play';f.ui.render();
+    const toggle=()=>f.box.querySelector('[data-course-drawer="0"]');
+    assert.equal(toggle().getAttribute('aria-expanded'),'true');
+    assert.equal(toggle().closest('.wb-home-course').querySelector('[role=progressbar]').getAttribute('aria-valuenow'),'50');
+    let commands=0;f.window.chrome.runtime.sendMessage=async()=>{commands++;return {ok:true};};
+    toggle().click();f.ui.render();
+    assert.equal(toggle().getAttribute('aria-expanded'),'false');
+    assert.equal(f.box.querySelector('#wb-drawer-0').hasAttribute('inert'),true);
+    c.records[c.directory.items[1].key]={confirmed:true};f.ui.render();
+    assert.equal(toggle().getAttribute('aria-expanded'),'false');
+    toggle().click();assert.equal(toggle().getAttribute('aria-expanded'),'true');
+    assert.equal(commands,0);
+    c.scanState='scanning';f.ui.render();assert.equal(toggle(),null);
+    c.scanState='ready';f.ui.render();assert.equal(toggle().getAttribute('aria-expanded'),'true');
+    f.job.targetIndex=1;f.ui.render();
+    assert.equal(f.box.querySelector('[data-course-drawer="1"]'),null,'unscanned next course does not inherit progress');
+  } finally {f.window.close();}
+});
+
+test('manual progress uses the same saved records in live and remote tabs',()=>{
+  const f=setup(), remote=homeFixture([]);
+  try {
+    f.job.workflow='manual';f.job.phase='selection';f.job.candidates[0].scanState='ready';
+    remote.api.state.tabId=2;remote.api.state.job=JSON.parse(JSON.stringify(f.job));
+    f.api.getMenuItems()[1].querySelector('.lecture-status').innerHTML='<i class="done-icon"></i>';
+    f.api.state.processedCourseKey=f.api.currentCourseKey();
+    f.api.state.processedItems.set(f.job.candidates[0].directory.items[1].key,{confirmed:true});
+    const live=f.ui.render(), other=remote.api.state.uiController.render();
+    assert.equal(live.overview.courseProgress[0].confirmed,1);
+    assert.equal(other.overview.courseProgress[0].confirmed,1);
+    const key=f.job.candidates[0].directory.items[1].key;
+    f.job.candidates[0].records[key]={confirmed:true};
+    remote.api.state.job=JSON.parse(JSON.stringify(f.job));
+    assert.equal(f.ui.render().overview.courseProgress[0].confirmed,2);
+    assert.equal(remote.api.state.uiController.render().overview.courseProgress[0].confirmed,2);
+  } finally {f.window.close();remote.window.close();}
+});
+
+test('running home shows a status badge and no duplicate course title; other drawers stay compact',()=>{
+  const f=setup();
+  try {
+    Object.assign(f.job,{workflow:'manual',running:true,phase:'course',operation:'play',ownerTabId:1});
+    f.job.candidates[0].scanState='ready';f.job.candidates[1].scanState='ready';
+    f.ui.render();
+    const card=f.box.querySelector('.wb-home-course');
+    assert.match(card.querySelector('.wb-course-state').textContent,/学习中/);
+    assert.equal(card.querySelector('.wb-course-start'),null);
+    assert.equal(f.box.querySelector('#wb-ui-title').hidden,true);
+    assert.equal(f.box.querySelector('[data-course-drawer="0"]').getAttribute('aria-expanded'),'true');
+    assert.equal(f.box.querySelector('[data-course-drawer="1"]').getAttribute('aria-expanded'),'false');
+  } finally {f.window.close();}
+});
