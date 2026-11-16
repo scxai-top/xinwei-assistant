@@ -1,0 +1,10 @@
+node_modules/
+.DS_Store
+coverage/
+.nyc_output/
+
+# Browser diagnostics and local acceptance evidence stay on the developer machine.
+artifacts/*
+!artifacts/README.md
+.env
+.env.*
